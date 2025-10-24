@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gerador de Termo – Next.js (TypeScript)
 
-## Getting Started
+Aplicação para editar um modelo de termo e gerar PDF. Tudo versionado em JSON no servidor. Interface com duas abas: **Campos** e **Termo**. Em **Campos** você preenche os valores e baixa o PDF. Em **Termo** você edita o modelo, vê e gerencia o histórico.
 
-First, run the development server:
+## Requisitos
+- Node.js 18 ou 20
+- npm
 
+## Instalação
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm i
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Desenvolvimento
+```bash
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Build e produção
+```bash
+npm run build
+npm run start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## API
+### GET /api/template
+Retorna o modelo atual.
+```json
+{ "title": "...", "body": "...", "signer1": "...", "signer2": "...", "currentId": "..." }
+```
 
-## Learn More
+### PUT /api/template
+Salva um novo modelo e cria uma versão no histórico.
+Request:
+```json
+{ "title": "...", "body": "...", "signer1": "...", "signer2": "..." }
+```
+Response:
+```json
+{ "ok": true, "entry": { "id": "...", "ts": 1712345678, "title": "...", "body": "...", "signer1": "...", "signer2": "..." } }
+```
 
-To learn more about Next.js, take a look at the following resources:
+### GET /api/history
+Lista do histórico do mais novo para o mais antigo.
+```json
+[ { "id": "...", "ts": 1712345678, "title": "...", "body": "...", "signer1": "...", "signer2": "..." } ]
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### POST /api/history/revert
+Define uma versão do histórico como modelo em uso e cria uma nova entrada no topo.
+Request:
+```json
+{ "id": "..." }
+```
+Response:
+```json
+{ "ok": true, "entry": { "id": "...", "ts": 1712345678, "title": "...", "body": "...", "signer1": "...", "signer2": "..." } }
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### POST /api/history/delete
+Remove uma versão do histórico. Não remove a versão em uso.
+Request:
+```json
+{ "id": "..." }
+```
 
-## Deploy on Vercel
+## Uso
+1. Acesse a aba **Campos** e preencha os campos detectados no texto.
+2. Baixe o PDF usando o botão Download PDF.
+3. Para mudar o modelo, vá em **Termo**, edite título, corpo e assinaturas e salve.
+4. Veja o histórico, visualize versões antigas, reverta ou exclua.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Template do termo
+Arquivo `data/template.json`:
+```json
+{
+  "title": "Termo de Mudança Condomínio Attuale",
+  "body": "Texto com variáveis como {{unidade}} e pipes {{cargo|Zelador}}",
+  "signer1": "{{assin1_nome}}\\nCPF {{assin1_cpf}}\\n{{assin1_cargo|Locatário}}\\nAssinatura",
+  "signer2": "{{assin2_nome}}\\nCPF {{assin2_cpf}}\\n{{assin2_cargo|Zelador}}\\nAssinatura"
+}
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Variáveis
+- Formato `{{chave}}` ou `{{chave|valor_padrao}}`.
+- Datas no formato `YYYY-MM-DD` são renderizadas por extenso. Ex.: `2025-10-23` vira `23 de outubro de 2025`.
+- Campos com nome que contém `cpf` são mascarados como `000.000.000-00`.
+
+## PDF
+Gerado no cliente usando html2canvas e jsPDF no formato A4 retrato.
+
+## Notas
+- O histórico guarda até 200 versões.
+- A UI mostra qual versão está em uso e qual você está visualizando.
+- As assinaturas ficam no rodapé do documento.
