@@ -24,8 +24,6 @@ const Page = () => {
   const [varsState, setVarsState] = useState<Record<string, string>>({})
   const previewRefCampos = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { ; (async () => { await import('bootstrap/dist/js/bootstrap.bundle.min.js') })() }, [])
-
   const loadCurrentTemplate = async () => {
     setLoadingTpl(true)
     try {
