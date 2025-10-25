@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import jsPDF from 'jspdf'
+import { Modal, Accordion, Button } from 'react-bootstrap'
 
 type Template = { title: string; body: string; signer1: string; signer2: string; currentId?: string | null }
 type Entry = Template & { id: string; ts: number }
@@ -24,7 +25,8 @@ const Page = () => {
   const [varsState, setVarsState] = useState<Record<string, string>>({})
   const previewRefCampos = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { ; (async () => { await import('bootstrap/dist/js/bootstrap.bundle.min.js') })() }, [])
+  const [showModal, setShowModal] = useState(false)
+  const [versionsOpen, setVersionsOpen] = useState(true)
 
   const loadCurrentTemplate = async () => {
     setLoadingTpl(true)
@@ -56,13 +58,10 @@ const Page = () => {
     if (activeTab === 'termo') {
       ; (async () => {
         await loadVersions()
-        if (!previewVersionId) {
-          // garante que o editor mostre a versão oficial ao abrir a aba
-          await loadCurrentTemplate()
-        }
+        if (!previewVersionId) await loadCurrentTemplate()
       })()
     }
-  }, [activeTab])
+  }, [activeTab, previewVersionId])
 
   const parseAllPlaceholders = (t?: Template) => {
     if (!t) return { order: [] as string[], defaults: {} as Record<string, string> }
@@ -88,9 +87,7 @@ const Page = () => {
     if (!allVars.length) return
     setVarsState(p => {
       const next = { ...p }
-      allVars.forEach(v => {
-        if (next[v] === undefined || next[v] === '') next[v] = defaultsMap[v] ?? ''
-      })
+      allVars.forEach(v => { if (next[v] === undefined || next[v] === '') next[v] = defaultsMap[v] ?? '' })
       return next
     })
   }, [allVars, defaultsMap])
@@ -109,10 +106,7 @@ const Page = () => {
 
   const visibleValue = (name: string, fallback?: string) => {
     const val = varsState[name] ?? ''
-    if (val) {
-      if (name.toLowerCase().includes('cpf')) return formatCPF(val)
-      return val
-    }
+    if (val) return name.toLowerCase().includes('cpf') ? formatCPF(val) : val
     if (fallback) return fallback
     return ''
   }
@@ -129,8 +123,7 @@ const Page = () => {
       const [name, fallback] = raw.split('|')
       const key = name.trim()
       const val = visibleValue(key, fallback)
-      if (val) parts.push(val)
-      else parts.push(<span key={m.index} className="placeholder-var">{`{${key}}`}</span>)
+      parts.push(val ? val : <span key={m.index} className="placeholder-var">{`{${key}}`}</span>)
       lastIndex = rx.lastIndex
     }
     const after = text.slice(lastIndex)
@@ -146,48 +139,44 @@ const Page = () => {
       return val || `{${key}}`
     })
 
-  const cleanSignerText = (s: string) =>
-    s.split('\n').filter(line => line.trim().toLowerCase() !== 'assinatura').join('\n')
+  const cleanSignerText = (s: string) => s.split('\n').filter(l => l.trim().toLowerCase() !== 'assinatura').join('\n')
 
-  const justifyParagraph = (doc: jsPDF, text: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
+  const justifyParagraph = (doc: jsPDF, text: string, x: number, y: number, maxWidth: number, lineH: number) => {
     const paragraphs = text.split(/\n{2,}/)
-    let cursorY = y
+    let cy = y
     paragraphs.forEach((p, pi) => {
       const words = p.replace(/\n/g, ' ').split(/\s+/).filter(Boolean)
-      if (words.length === 0) { cursorY += lineHeight; return }
+      if (words.length === 0) { cy += lineH; return }
       const lines: string[][] = []
-      let current: string[] = []
-      const spaceW = doc.getTextWidth(' ')
+      let cur: string[] = []
+      const spW = doc.getTextWidth(' ')
       words.forEach(w => {
-        const test = [...current, w].join(' ')
+        const test = [...cur, w].join(' ')
         const wTest = doc.getTextWidth(test)
-        if (wTest <= maxWidth || current.length === 0) current.push(w)
-        else { lines.push(current); current = [w] }
+        if (wTest <= maxWidth || cur.length === 0) cur.push(w)
+        else { lines.push(cur); cur = [w] }
       })
-      if (current.length) lines.push(current)
-      lines.forEach((lineWords, idx) => {
-        const isLast = idx === lines.length - 1
-        const raw = lineWords.join(' ')
-        if (isLast || lineWords.length === 1) doc.text(raw, x, cursorY)
+      if (cur.length) lines.push(cur)
+      lines.forEach((lw, idx) => {
+        const last = idx === lines.length - 1
+        const raw = lw.join(' ')
+        if (last || lw.length === 1) doc.text(raw, x, cy)
         else {
           const textW = doc.getTextWidth(raw)
-          const gaps = lineWords.length - 1
+          const gaps = lw.length - 1
           const extra = maxWidth - textW
-          const extraPerGap = extra / gaps
-          let cursorX = x
-          lineWords.forEach((w, i) => {
-            doc.text(w, cursorX, cursorY)
-            if (i < gaps) {
-              const step = doc.getTextWidth(w) + spaceW + extraPerGap
-              cursorX += step
-            }
+          const extraGap = extra / gaps
+          let cx = x
+          lw.forEach((w, i) => {
+            doc.text(w, cx, cy)
+            if (i < gaps) { cx += doc.getTextWidth(w) + spW + extraGap }
           })
         }
-        cursorY += lineHeight
+        cy += lineH
       })
-      if (pi < paragraphs.length - 1) cursorY += lineHeight * 0.5
+      if (pi < paragraphs.length - 1) cy += lineH * 0.5
     })
-    return cursorY
+    return cy
   }
 
   const downloadPDF = async () => {
@@ -213,27 +202,27 @@ const Page = () => {
       const lineHeight = 6
       y = justifyParagraph(doc, bodyStr, margin, y, contentW, lineHeight)
 
-      const sigAreaTop = Math.max(y + 16, pageH - 60)
+      const sigTop = Math.max(y + 16, pageH - 60)
       const colW = contentW / 2
 
-      const drawSignature = (leftX: number, signerText: string) => {
-        const centerX = leftX + colW / 2
-        const lineY = sigAreaTop
+      const drawSig = (leftX: number, s: string) => {
+        const cx = leftX + colW / 2
+        const lineY = sigTop
         doc.line(leftX + 8, lineY, leftX + colW - 8, lineY)
         doc.setFont('times', 'normal')
         doc.setFontSize(11)
-        const cleaned = cleanSignerText(signerText)
-        const signerLines = doc.splitTextToSize(renderTextForPdf(cleaned), colW - 16)
-        let textY = lineY + 6
-        signerLines.forEach((s: string | string[]) => { doc.text(s, centerX, textY, { align: 'center' }); textY += 5 })
+        const cleaned = cleanSignerText(s)
+        const lines = doc.splitTextToSize(renderTextForPdf(cleaned), colW - 16)
+        let ty = lineY + 6
+        lines.forEach((t: string | string[]) => { doc.text(t, cx, ty, { align: 'center' }); ty += 5 })
         doc.setFontSize(10)
         doc.setTextColor(100)
-        doc.text('Assinatura', centerX, textY + 2, { align: 'center' })
+        doc.text('Assinatura', cx, ty + 2, { align: 'center' })
         doc.setTextColor(0)
       }
 
-      drawSignature(margin, currentTpl.signer1)
-      drawSignature(margin + colW, currentTpl.signer2)
+      drawSig(margin, currentTpl.signer1)
+      drawSig(margin + colW, currentTpl.signer2)
 
       const resolved = {
         title: titleStr,
@@ -265,33 +254,27 @@ const Page = () => {
       await loadVersions()
       await loadCurrentTemplate()
       setPreviewVersionId(null)
-      // mantém o editor mostrando a versão oficial recém salva
-      setEditorTpl(prev => currentTpl ? { ...currentTpl, ...editorTpl } : editorTpl)
+      setEditorTpl(null)
     } finally { setSavingTpl(false) }
   }
 
   const selectVersion = async (id: string) => {
     const r = await fetch(`/api/versions/${encodeURIComponent(id)}`, { cache: 'no-store' })
     if (!r.ok) return
-    const entry = await r.json() as Entry
-    const selected: Template = { title: entry.title, body: entry.body, signer1: entry.signer1, signer2: entry.signer2 }
-    setEditorTpl(selected)
+    const e = await r.json() as Entry
+    setEditorTpl({ title: e.title, body: e.body, signer1: e.signer1, signer2: e.signer2 })
     setPreviewVersionId(id)
     if (activeTab !== 'termo') setActiveTab('termo')
   }
 
   const restoreVersion = async (id: string) => {
-    await fetch('/api/history/revert', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    })
+    await fetch('/api/history/revert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     await loadVersions()
     await loadCurrentTemplate()
     const r = await fetch(`/api/versions/${encodeURIComponent(id)}`, { cache: 'no-store' })
     if (r.ok) {
-      const entry = await r.json() as Entry
-      setEditorTpl({ title: entry.title, body: entry.body, signer1: entry.signer1, signer2: entry.signer2 })
+      const e = await r.json() as Entry
+      setEditorTpl({ title: e.title, body: e.body, signer1: e.signer1, signer2: e.signer2 })
     } else {
       setEditorTpl(currentTpl)
     }
@@ -300,11 +283,7 @@ const Page = () => {
   }
 
   const deleteVersion = async (id: string) => {
-    await fetch('/api/history/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    })
+    await fetch('/api/history/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     await loadVersions()
     if (previewVersionId === id) {
       await loadCurrentTemplate()
@@ -383,22 +362,22 @@ const Page = () => {
           <div className="header-actions">
             {activeTab === 'campos' && (
               <>
-                <button className="btn btn-outline-secondary btn-sm mobile-only" data-bs-toggle="modal" data-bs-target="#previewModal" title="Pré-visualização">
+                <Button variant="outline-secondary" size="sm" className="mobile-only" title="Pré-visualização" onClick={() => setShowModal(true)}>
                   🔍
-                </button>
-                <button className="btn btn-primary btn-sm desktop-only" onClick={downloadPDF} disabled={downloading || !currentTpl}>
+                </Button>
+                <Button variant="primary" size="sm" className="desktop-only" onClick={downloadPDF} disabled={downloading || !currentTpl}>
                   {downloading ? 'Gerando...' : 'Baixar PDF'}
-                </button>
+                </Button>
               </>
             )}
             {activeTab === 'termo' && (
               <>
-                <button className="btn btn-outline-secondary btn-sm mobile-only" data-bs-toggle="modal" data-bs-target="#previewModal" title="Pré-visualização">
+                <Button variant="outline-secondary" size="sm" className="mobile-only" title="Pré-visualização" onClick={() => setShowModal(true)}>
                   🔍
-                </button>
-                <button className="btn btn-success btn-sm desktop-only" onClick={saveTemplate} disabled={savingTpl || !editorTpl}>
+                </Button>
+                <Button variant="success" size="sm" className="desktop-only" onClick={saveTemplate} disabled={savingTpl || !editorTpl}>
                   {savingTpl ? 'Salvando...' : 'Salvar versão'}
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -472,97 +451,79 @@ const Page = () => {
           </div>
 
           <div className="col-12 col-lg-4">
-            <div className="accordion" id="versionsAcc">
-              <div className="accordion-item">
-                <h2 className="accordion-header" id="headingVersions">
-                  <button
-                    className="accordion-button"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#collapseVersions"
-                    aria-expanded="true"
-                    aria-controls="collapseVersions"
-                    onClick={loadVersions}
-                  >
-                    Versões
-                  </button>
-                </h2>
-                <div id="collapseVersions" className="accordion-collapse collapse show" aria-labelledby="headingVersions" data-bs-parent="#versionsAcc">
-                  <div className="accordion-body">
-                    {versions.length === 0 && <div className="text-muted">Sem versões ainda</div>}
-                    {versions.map(v => {
-                      const isCurrent = currentId === v.id
-                      const isPreview = previewVersionId === v.id
-                      return (
-                        <div
-                          key={v.id}
-                          role="button"
-                          onClick={() => selectVersion(v.id)}
-                          className={`border rounded p-2 mb-2 ${isCurrent ? 'history-selected' : ''} ${isPreview ? 'border border-primary' : ''}`}
-                        >
-                          <div className="d-flex justify-content-between align-items-start">
-                            <strong className="me-2">{v.title}</strong>
-                            <div className="d-flex align-items-center gap-2">
-                              {isCurrent && <span className="badge badge-selected">selecionada</span>}
-                              <small className="text-muted">{new Date(v.ts).toLocaleString('pt-BR')}</small>
-                            </div>
-                          </div>
-                          <div className="mt-2 d-flex gap-2">
-                            {!isCurrent && (
-                              <>
-                                <button
-                                  className="btn btn-sm btn-outline-primary"
-                                  onClick={(e) => { e.stopPropagation(); restoreVersion(v.id) }}
-                                >
-                                  Restaurar
-                                </button>
-                                <button
-                                  className="btn btn-sm btn-outline-danger"
-                                  onClick={(e) => { e.stopPropagation(); deleteVersion(v.id) }}
-                                >
-                                  Excluir
-                                </button>
-                              </>
-                            )}
+            <Accordion activeKey={versionsOpen ? '0' : undefined} onSelect={() => setVersionsOpen(v => !v)}>
+              <Accordion.Item eventKey="0">
+                <Accordion.Header>Versões</Accordion.Header>
+                <Accordion.Body>
+                  {versions.length === 0 && <div className="text-muted">Sem versões ainda</div>}
+                  {versions.map(v => {
+                    const isCurrent = currentId === v.id
+                    const isPreview = previewVersionId === v.id
+                    return (
+                      <div
+                        key={v.id}
+                        role="button"
+                        onClick={() => selectVersion(v.id)}
+                        className={`border rounded p-2 mb-2 ${isCurrent ? 'history-selected' : ''} ${isPreview ? 'border border-primary' : ''}`}
+                      >
+                        <div className="d-flex justify-content-between align-items-start">
+                          <strong className="me-2">{v.title}</strong>
+                          <div className="d-flex align-items-center gap-2">
+                            {isCurrent && <span className="badge badge-selected">selecionada</span>}
+                            <small className="text-muted">{new Date(v.ts).toLocaleString('pt-BR')}</small>
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-
+                        <div className="mt-2 d-flex gap-2">
+                          {!isCurrent && (
+                            <>
+                              <Button
+                                variant="outline-primary"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); restoreVersion(v.id) }}
+                              >
+                                Restaurar
+                              </Button>
+                              <Button
+                                variant="outline-danger"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); deleteVersion(v.id) }}
+                              >
+                                Excluir
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </Accordion.Body>
+              </Accordion.Item>
+            </Accordion>
           </div>
         </div>
       )}
 
-      <div className="modal fade" id="previewModal" tabIndex={-1} aria-hidden="true">
-        <div className="modal-dialog modal-fullscreen-sm-down modal-lg">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">Pré-visualização</h5>
-              <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <div className="modal-body">
-              <div className="preview-box">{activeTab === 'campos' ? previewDocCampos : previewDocEditor}</div>
-            </div>
-            <div className="modal-footer">
-              {activeTab === 'termo' && (
-                <button className="btn btn-success" onClick={saveTemplate} disabled={savingTpl || !editorTpl}>
-                  {savingTpl ? 'Salvando...' : 'Salvar versão'}
-                </button>
-              )}
-              <button className="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-              {activeTab === 'campos' && (
-                <button className="btn btn-primary" onClick={downloadPDF} disabled={downloading || !currentTpl}>
-                  {downloading ? 'Gerando...' : 'Baixar PDF'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      <Modal show={showModal} onHide={() => setShowModal(false)} fullscreen="sm-down" size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Pré-visualização</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="preview-box">{activeTab === 'campos' ? previewDocCampos : previewDocEditor}</div>
+        </Modal.Body>
+        <Modal.Footer>
+          {activeTab === 'termo' && (
+            <Button variant="success" onClick={saveTemplate} disabled={savingTpl || !editorTpl}>
+              {savingTpl ? 'Salvando...' : 'Salvar versão'}
+            </Button>
+          )}
+          <Button variant="secondary" onClick={() => setShowModal(false)}>Fechar</Button>
+          {activeTab === 'campos' && (
+            <Button variant="primary" onClick={downloadPDF} disabled={downloading || !currentTpl}>
+              {downloading ? 'Gerando...' : 'Baixar PDF'}
+            </Button>
+          )}
+        </Modal.Footer>
+      </Modal>
     </div>
   )
 }
