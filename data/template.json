@@ -2,5 +2,5 @@
   "title": "Termo de Mudança Condomínio Attualee",
   "body": "Das responsabilidades em relação à mudança para os novos moradores da Unidade {{unidade}} da Torre {{torre}}, sr(a) {{morador}} Portador do CPF nº {{cpf_morador}} e da cédula de RG Nº {{rg_morador}} lhe foram passados as responsabilidades e os cuidados de não arrastar móveis, e cuidados com as paredes e teto (spot da iluminação) e o uso exclusivo do elevador de serviço e a parada do veículo de transporte na vaga de carga e descarga, ficando ciente do horário de mudança das {{janela|08:00 às 18:00}}, {{dia_semana}}, {{data_mudanca}}, sendo feito a integração com o(a) sr. {{integrador}} sendo passado o regimento interno e encaminhamento via WhatsApp o explicativo de todo conteúdo.",
   "signer1": "{{morador}}\nCPF {{cpf_morador}}\n{{assin1_cargo|Locatário}}\nAssinatura",
-  "signer2": "{{integrador}}\nCPF {{assin2_cpf}}\n{{assin2_cargo|Zelador}}\nAssinatura"
+  "signer2": "{{integrador|Jean Cordeiro Forte}}\nCPF {{assin2_cpf|310.869.478-27}}\n{{assin2_cargo|Zelador}}\nAssinatura"
 }
